@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BSA Commercial</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#000;--sf:#0d0d0d;--ln:#2a2a2a;--tx:#fff;--mu:#9a9a9a;--ok:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--ln);position:sticky;top:0;background:var(--bg);z-index:5}
+.logo{font-weight:700;letter-spacing:.12em}.logo small{color:var(--mu);font-weight:400;letter-spacing:0;margin-left:8px}
+nav{display:flex;gap:4px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--ln)}
+nav button,.btn{background:none;border:1px solid var(--ln);color:var(--tx);padding:8px 14px;cursor:pointer;font:inherit;border-radius:2px}
+nav button.on,.btn.pri{background:#fff;color:#000;border-color:#fff;font-weight:600}
+.btn:hover,nav button:hover{border-color:#fff}.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,nav button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+main{max-width:1100px;margin:0 auto;padding:20px}h2{font-size:20px;margin:0 0 16px}h3{font-size:15px;margin:24px 0 10px;color:var(--mu);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.card{background:var(--sf);border:1px solid var(--ln);padding:14px}.card b{display:block;font-size:28px;line-height:1.1}.card span{color:var(--mu);font-size:13px}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:4px}
+input,select,textarea{width:100%;background:#000;color:#fff;border:1px solid var(--ln);padding:9px;font:inherit;border-radius:2px}
+.f{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}.full{grid-column:1/-1}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--ln)}th{color:var(--mu);font-weight:600}
+.tw{overflow-x:auto}tr.k{cursor:pointer}tr.k:hover{background:var(--sf)}
+.bar{height:8px;background:var(--ln)}.bar i{display:block;height:100%;background:#fff}
+.chart{display:flex;align-items:flex-end;gap:6px;height:140px;border-bottom:1px solid var(--ln);padding-top:8px}
+.chart div{flex:1;background:#fff;min-width:6px;position:relative}.chart div:hover::after{content:attr(data-t);position:absolute;bottom:100%;left:0;background:#222;padding:2px 6px;font-size:11px;white-space:nowrap}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:12px 0}.row>*{flex:1;min-width:140px}.row .btn{flex:0 0 auto}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#fff;color:#000;padding:10px 18px;display:none;z-index:9;max-width:90vw}
+#toast.err{background:#3a0000;color:#fff;border:1px solid #900}
+pre{white-space:pre-wrap;background:var(--sf);border:1px solid var(--ln);padding:14px;font:13px/1.5 ui-monospace,monospace}
+.login{max-width:360px;margin:12vh auto;padding:0 20px}.login .logo{font-size:22px;margin-bottom:24px}.login label{margin-top:12px}
+.co{border:1px solid var(--ln);padding:12px;margin-bottom:10px}.muted{color:var(--mu)}
+@media(max-width:600px){main{padding:14px}.card b{font-size:24px}}
+</style></head><body>
+<div id="app"></div><div id="toast" role="status"></div>
+<script>
+// ====== CONFIGURAÇÃO (Supabase > Project Settings > API) ======
+let SUPABASE_URL="COLE_AQUI_A_URL_DO_PROJETO",SUPABASE_ANON_KEY="COLE_AQUI_A_ANON_KEY";
+try{const h=new URLSearchParams(location.hash.slice(1));
+ if(h.get("u")&&h.get("k"))localStorage.setItem("bsa_cfg",JSON.stringify([h.get("u"),h.get("k")]));
+ const c=JSON.parse(localStorage.getItem("bsa_cfg")||"null");
+ if(c&&SUPABASE_URL.startsWith("COLE"))[SUPABASE_URL,SUPABASE_ANON_KEY]=c}catch(e){}
+const NOCFG=SUPABASE_URL.startsWith("COLE");
+const sb=NOCFG?null:supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+// Indicadores por cargo: novos cargos entram aqui
+const CARGOS={sdr:{nome:"SDR",campos:[["ligacoes","Ligações realizadas"],["atenderam","Empresas que atenderam"],["conversas","Conversas efetivas"],["interessadas","Empresas interessadas"],["agendadas","Reuniões agendadas"],["confirmadas","Reuniões confirmadas"],["realizadas","Reuniões realizadas"],["followups","Follow-ups realizados"]],metas:["ligacoes","atenderam","agendadas","realizadas"]},
+closer:{nome:"Closer",campos:[],metas:[]},gestor:{nome:"Gestor",campos:[],metas:[]}};
+const STATUS=["Não atendeu","Número inexistente","Atendeu, mas não demonstrou interesse","Interessado","Solicitou retorno","Reunião agendada","Reunião confirmada","Reunião realizada"];
+const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hoje=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const br=d=>d.split("-").reverse().join("/"),pct=(a,b)=>b?(a/b*100).toFixed(2).replace(".",",")+"%":"0%";
+let me=null,view="",cfg={};
+function toast(m,e){const t=$("#toast");t.textContent=m;t.className=e?"err":"";t.style.display="block";clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",4000)}
+async function q(p){const r=await p;if(r.error){toast(r.error.message,1);throw r.error}return r.data}
+async function init(){
+ const{data:{session}}=await sb.auth.getSession();
+ if(!session)return login();
+ const{data}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+ if(!data||!data.ativo){await sb.auth.signOut();return login("Acesso não autorizado.")}
+ me=data;const s=await q(sb.from("settings").select("*"));s.forEach(x=>cfg[x.key]=x.value);
+ shell();go(me.role==="admin"?"admin":"dash")}
+function login(msg){$("#app").innerHTML=`<div class="login"><div class="logo">BSA<small>Commercial</small></div>
+<label for="em">E-mail</label><input id="em" type="email" autocomplete="username">
+<label for="pw">Senha</label><input id="pw" type="password" autocomplete="current-password">
+<p class="muted" id="lm">${msg||""}</p><button class="btn pri" id="lg" style="width:100%">Entrar</button></div>`;
+ const go1=async()=>{const{error}=await sb.auth.signInWithPassword({email:$("#em").value.trim(),password:$("#pw").value});
+  if(error)$("#lm").textContent="E-mail ou senha incorretos.";else init()};
+ $("#lg").onclick=go1;$("#pw").onkeydown=e=>e.key==="Enter"&&go1()}
+function shell(){const adm=me.role==="admin";
+ const tabs=adm?[["admin","Visão geral"],["hist","Histórico"],["metas","Metas"],["users","Usuários"],["audit","Auditoria"],["cfg","Configurações"]]:[["dash","Painel"],["reg","Registro diário"],["hist","Histórico"]];
+ $("#app").innerHTML=`<header><div class="logo">BSA<small>Commercial</small></div><div><span class="muted">${esc(me.nome)} · ${adm?"Administrador":CARGOS[me.cargo].nome}</span> <button class="btn" id="out">Sair</button></div></header>
+<nav>${tabs.map(t=>`<button data-v="${t[0]}">${t[1]}</button>`).join("")}</nav><main id="m"></main>`;
+ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>go(b.dataset.v));
+ $("#out").onclick=async()=>{await sb.auth.signOut();me=null;login()}}
+function go(v){view=v;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+ ({dash,reg,hist,admin,metas,users,audit,cfgv})[v==="cfg"?"cfgv":v]()}
+const sum=(rs,k)=>rs.reduce((a,r)=>a+(+r[k]||0),0);
+function cards(rs,cargo){return`<div class="grid">${CARGOS[cargo].campos.map(([k,l])=>`<div class="card"><b>${sum(rs,k)}</b><span>${l}</span></div>`).join("")}</div>`}
+function chart(rs,k,dias){const m={};rs.forEach(r=>m[r.data]=(m[r.data]||0)+r[k]);
+ const ds=Object.keys(m).sort().slice(-dias),mx=Math.max(1,...ds.map(d=>m[d]));
+ return`<div class="chart">${ds.map(d=>`<div style="height:${m[d]/mx*100}%" data-t="${br(d)}: ${m[d]}"></div>`).join("")||'<span class="muted">Sem dados</span>'}</div>`}
+async function dash(){
+ const rs=await q(sb.from("daily_reports").select("*").eq("user_id",me.id).order("data"));
+ const t=rs.filter(r=>r.data===hoje()),g=await q(sb.from("goals").select("*").eq("cargo",me.cargo));
+ const gm=Object.fromEntries(g.map(x=>[x.chave,x.valor])),sem=rs.filter(r=>r.data>=new Date(Date.now()-6*864e5).toISOString().slice(0,10)),mes=rs.filter(r=>r.data.slice(0,7)===hoje().slice(0,7));
+ $("#m").innerHTML=`<h2>${esc(me.nome)} <span class="muted">· ${br(hoje())}</span></h2>${cards(t,me.cargo)}
+ <h3>Metas de hoje</h3>${CARGOS[me.cargo].metas.map(k=>{const v=sum(t,k),m=gm[k]||0,p=m?Math.min(100,v/m*100):0;return`<p>${CARGOS[me.cargo].campos.find(c=>c[0]===k)[1]}: ${v}/${m} (${Math.round(p)}%)<div class="bar"><i style="width:${p}%"></i></div></p>`}).join("")}
+ <h3>Ligações por dia (últimos 14 dias)</h3>${chart(rs,"ligacoes",14)}
+ <h3>Semana: ${sum(sem,"ligacoes")} ligações · ${sum(sem,"agendadas")} agendadas</h3>
+ <h3>Mês: ${sum(mes,"ligacoes")} ligações · ${sum(mes,"agendadas")} agendadas · ${sum(mes,"realizadas")} realizadas</h3>
+ ${t.length?"":'<p class="muted">Nenhum registro enviado hoje.</p><button class="btn pri" onclick="go(\'reg\')">Fazer registro de hoje</button>'}`}
+function coHtml(c={}){return`<div class="co f"><div><label>Empresa *</label><input data-k="empresa" value="${esc(c.empresa)}"></div><div><label>Responsável</label><input data-k="responsavel"></div><div><label>Telefone / WhatsApp</label><input data-k="telefone"></div><div><label>Segmento</label><input data-k="segmento"></div><div><label>Resultado da ligação</label><input data-k="resultado"></div><div><label>Status *</label><select data-k="status">${STATUS.map(s=>`<option>${s}</option>`).join("")}</select></div><div class="full"><label>Observações</label><input data-k="observacoes"></div><div class="full"><label>Próxima ação necessária</label><input data-k="proxima_acao"></div></div>`}
+function reg(){const cs=CARGOS[me.cargo].campos;
+ $("#m").innerHTML=`<h2>Registro diário</h2><p class="muted">Depois de enviado, o registro não pode ser editado nem excluído por você.</p>
+ <div class="f"><div><label>Data da operação *</label><input type="date" id="rd" value="${hoje()}" max="${hoje()}"></div>
+ ${cs.map(([k,l])=>`<div><label>${l} *</label><input type="number" min="0" inputmode="numeric" id="f_${k}"></div>`).join("")}
+ <div class="full"><label>Observações gerais do dia</label><textarea id="f_obs" rows="3"></textarea></div></div>
+ <h3>Empresas prospectadas</h3><div id="cos"></div><button class="btn" id="addc">Adicionar empresa</button>
+ <div class="row"><button class="btn pri" id="sv">Enviar registro</button></div><div id="res"></div>`;
+ $("#cos").innerHTML=coHtml();$("#addc").onclick=()=>$("#cos").insertAdjacentHTML("beforeend",coHtml());
+ $("#sv").onclick=async()=>{
+  const r={data:$("#rd").value,observacoes:$("#f_obs").value.trim()};
+  for(const[k,l]of cs){const v=$("#f_"+k).value;if(v===""||+v<0)return toast(`Preencha: ${l}`,1);r[k]=parseInt(v)}
+  if(!r.data)return toast("Informe a data",1);
+  if(r.atenderam>r.ligacoes||r.agendadas>r.atenderam&&0)return toast("Atenderam não pode ser maior que ligações",1);
+  const cos=[...document.querySelectorAll("#cos .co")].map(d=>{const o={};d.querySelectorAll("[data-k]").forEach(i=>o[i.dataset.k]=i.value.trim()||null);return o}).filter(o=>o.empresa);
+  if(!confirm("Confirmar envio? Não será possível alterar depois."))return;
+  $("#sv").disabled=true;
+  try{const{data,error}=await sb.from("daily_reports").insert(r).select().single();
+   if(error){toast(error.code==="23505"?"Já existe registro para esta data.":error.message,1);$("#sv").disabled=false;return}
+   if(cos.length)await q(sb.from("companies").insert(cos.map(c=>({...c,report_id:data.id}))));
+   toast("Registro salvo");showReport(data,me,$("#res"))}catch(e){$("#sv").disabled=false}}}
+function reportText(r,u){const cs=Object.fromEntries(CARGOS.sdr.campos);
+ return`BSA AGENCY — RELATÓRIO DIÁRIO\n\nFuncionário: ${u.nome}\nCargo: ${CARGOS[u.cargo].nome}\nData: ${br(r.data)}\n\nPROSPECÇÃO:\n- Ligações realizadas: ${r.ligacoes}\n- Empresas que atenderam: ${r.atenderam}\n- Conversas efetivas: ${r.conversas}\n- Empresas interessadas: ${r.interessadas}\n- Follow-ups realizados: ${r.followups}\n\nREUNIÕES:\n- Reuniões agendadas: ${r.agendadas}\n- Reuniões confirmadas: ${r.confirmadas}\n- Reuniões realizadas: ${r.realizadas}\n\nDESEMPENHO:\n- Conversão de ligações em reuniões: ${pct(r.agendadas,r.ligacoes)}\n- Conversão de atendimentos em reuniões: ${pct(r.agendadas,r.atenderam)}\n\nOBSERVAÇÕES:\n${r.observacoes||"-"}\n\nRelatório gerado automaticamente pelo sistema BSA Commercial.`}
+function showReport(r,u,el){const t=reportText(r,u);
+ el.innerHTML=`<h3>Relatório</h3><pre>${esc(t)}</pre><button class="btn pri" id="wa">ENVIAR RELATÓRIO PELO WHATSAPP</button>`;
+ $("#wa").onclick=async()=>{const n=(cfg.whatsapp_admin||"").replace(/\D/g,"");
+  if(!n)return toast("Número administrativo não configurado",1);
+  await sb.from("report_shares").insert({report_id:r.id,texto:t});
+  window.open(`https://wa.me/${n}?text=${encodeURIComponent(t)}`,"_blank")}}
+async function hist(){const adm=me.role==="admin";let us=[];
+ if(adm)us=await q(sb.from("profiles").select("*").order("nome"));
+ $("#m").innerHTML=`<h2>Histórico</h2><div class="row">${adm?`<div><label>Funcionário</label><select id="hu"><option value="">Todos</option>${us.map(u=>`<option value="${u.id}">${esc(u.nome)}</option>`).join("")}</select></div><div><label>Cargo</label><select id="hc"><option value="">Todos</option>${Object.entries(CARGOS).map(([k,v])=>`<option value="${k}">${v.nome}</option>`).join("")}</select></div>`:""}
+ <div><label>De</label><input type="date" id="h1"></div><div><label>Até</label><input type="date" id="h2"></div><button class="btn" id="hb">Filtrar</button></div><div id="hl"></div><div id="hd"></div>`;
+ const run=async()=>{let s=sb.from("daily_reports").select("*,profiles(nome,cargo)").order("data",{ascending:false}).limit(300);
+  if(adm&&$("#hu").value)s=s.eq("user_id",$("#hu").value);if($("#h1").value)s=s.gte("data",$("#h1").value);if($("#h2").value)s=s.lte("data",$("#h2").value);
+  let rs=await q(s);if(adm&&$("#hc").value)rs=rs.filter(r=>r.profiles.cargo===$("#hc").value);
+  $("#hl").innerHTML=`<div class="tw"><table><tr><th>Data</th>${adm?"<th>Funcionário</th>":""}<th>Ligações</th><th>Atenderam</th><th>Agendadas</th><th>Realizadas</th></tr>${rs.map((r,i)=>`<tr class="k" data-i="${i}"><td>${br(r.data)}</td>${adm?`<td>${esc(r.profiles.nome)}</td>`:""}<td>${r.ligacoes}</td><td>${r.atenderam}</td><td>${r.agendadas}</td><td>${r.realizadas}</td></tr>`).join("")||'<tr><td class="muted">Nenhum registro.</td></tr>'}</table></div>`;
+  document.querySelectorAll("tr.k").forEach(tr=>tr.onclick=()=>detail(rs[tr.dataset.i]))};
+ $("#hb").onclick=run;run()}
+async function detail(r){const adm=me.role==="admin",cos=await q(sb.from("companies").select("*").eq("report_id",r.id).order("created_at"));
+ $("#hd").innerHTML=`<h3>Relatório de ${br(r.data)} — ${esc(r.profiles?.nome||me.nome)}</h3><p class="muted">Criado em ${new Date(r.created_at).toLocaleString("pt-BR")}${r.updated_at?" · corrigido em "+new Date(r.updated_at).toLocaleString("pt-BR"):""}</p><div id="rp"></div>
+ <h3>Empresas (${cos.length})</h3>${cos.map(c=>`<div class="co"><b>${esc(c.empresa)}</b> · ${esc(c.status)}<br><span class="muted">${esc([c.responsavel,c.telefone,c.segmento].filter(Boolean).join(" · "))}</span><br>${esc(c.resultado||"")} ${esc(c.observacoes||"")}${c.proxima_acao?`<br>Próxima ação: ${esc(c.proxima_acao)}`:""}</div>`).join("")||'<p class="muted">Nenhuma empresa detalhada.</p>'}
+ ${adm?`<h3>Corrigir registro</h3><div class="f">${CARGOS.sdr.campos.map(([k,l])=>`<div><label>${l}</label><input type="number" min="0" id="e_${k}" value="${r[k]}"></div>`).join("")}<div class="full"><label>Justificativa da correção *</label><input id="e_j"></div></div><div class="row"><button class="btn pri" id="eb">Salvar correção</button></div>`:""}`;
+ showReport(r,r.profiles||me,$("#rp"));$("#hd").scrollIntoView({behavior:"smooth"});
+ if(adm)$("#eb").onclick=async()=>{const u={justificativa:$("#e_j").value.trim()};if(!u.justificativa)return toast("Informe a justificativa",1);
+  CARGOS.sdr.campos.forEach(([k])=>u[k]=parseInt($("#e_"+k).value));await q(sb.from("daily_reports").update(u).eq("id",r.id));toast("Correção registrada no log");hist()}}
+async function admin(){
+ const[us,rs]=await Promise.all([q(sb.from("profiles").select("*")),q(sb.from("daily_reports").select("*,profiles(nome,cargo)").order("data"))]);
+ $("#m").innerHTML=`<h2>Visão geral</h2><div class="row"><div><label>De</label><input type="date" id="a1"></div><div><label>Até</label><input type="date" id="a2"></div><div><label>Cargo</label><select id="ac"><option value="">Todos</option>${Object.entries(CARGOS).map(([k,v])=>`<option value="${k}">${v.nome}</option>`).join("")}</select></div></div><div id="ad"></div>`;
+ const run=async()=>{let f=rs.filter(r=>(!$("#a1").value||r.data>=$("#a1").value)&&(!$("#a2").value||r.data<=$("#a2").value)&&(!$("#ac").value||r.profiles.cargo===$("#ac").value));
+  const ids=[...new Set(f.map(r=>r.user_id))],n=[];
+  const co=await q(sb.from("companies").select("id,user_id,report_id"));const fi=new Set(f.map(r=>r.id)),emp=co.filter(c=>fi.has(c.report_id));
+  $("#ad").innerHTML=`<div class="grid"><div class="card"><b>${sum(f,"ligacoes")}</b><span>Ligações</span></div><div class="card"><b>${sum(f,"agendadas")}</b><span>Reuniões agendadas</span></div><div class="card"><b>${sum(f,"realizadas")}</b><span>Reuniões realizadas</span></div><div class="card"><b>${emp.length}</b><span>Empresas prospectadas</span></div><div class="card"><b>${pct(sum(f,"agendadas"),sum(f,"ligacoes"))}</b><span>Ligações → reuniões</span></div></div>
+  <h3>Produtividade diária (ligações)</h3>${chart(f,"ligacoes",30)}
+  <h3>Semanal e mensal</h3><p>Últimos 7 dias: ${sum(f.filter(r=>r.data>=new Date(Date.now()-6*864e5).toISOString().slice(0,10)),"ligacoes")} ligações · Mês atual: ${sum(f.filter(r=>r.data.slice(0,7)===hoje().slice(0,7)),"ligacoes")} ligações</p>
+  <h3>Comparativo entre funcionários</h3><div class="tw"><table><tr><th>Funcionário</th><th>Ligações</th><th>Atenderam</th><th>Agendadas</th><th>Realizadas</th><th>Conversão</th></tr>${ids.map(id=>{const x=f.filter(r=>r.user_id===id);return`<tr><td>${esc(x[0].profiles.nome)}</td><td>${sum(x,"ligacoes")}</td><td>${sum(x,"atenderam")}</td><td>${sum(x,"agendadas")}</td><td>${sum(x,"realizadas")}</td><td>${pct(sum(x,"agendadas"),sum(x,"ligacoes"))}</td></tr>`}).join("")||'<tr><td class="muted">Sem dados no período.</td></tr>'}</table></div>`};
+ ["a1","a2","ac"].forEach(i=>$("#"+i).onchange=run);run()}
+async function metas(){const g=await q(sb.from("goals").select("*").order("cargo"));
+ $("#m").innerHTML=`<h2>Metas diárias</h2>${g.map(x=>`<div class="row"><div><label>${CARGOS[x.cargo].nome} · ${(CARGOS[x.cargo].campos.find(c=>c[0]===x.chave)||[0,x.chave])[1]}</label><input type="number" min="0" value="${x.valor}" data-c="${x.cargo}" data-k="${x.chave}"></div></div>`).join("")}<button class="btn pri" id="gs">Salvar metas</button>`;
+ $("#gs").onclick=async()=>{for(const i of document.querySelectorAll("[data-k]"))await q(sb.from("goals").update({valor:parseInt(i.value)}).eq("cargo",i.dataset.c).eq("chave",i.dataset.k));toast("Metas salvas")}}
+async function users(){const us=await q(sb.from("profiles").select("*").order("nome"));
+ $("#m").innerHTML=`<h2>Usuários</h2><div class="tw"><table><tr><th>Nome</th><th>Cargo</th><th>Permissão</th><th>Ativo</th></tr>${us.map(u=>`<tr><td>${esc(u.nome)}</td><td><select data-id="${u.id}" data-f="cargo">${Object.entries(CARGOS).map(([k,v])=>`<option value="${k}"${u.cargo===k?" selected":""}>${v.nome}</option>`).join("")}</select></td><td><select data-id="${u.id}" data-f="role"><option value="user"${u.role==="user"?" selected":""}>Funcionário</option><option value="admin"${u.role==="admin"?" selected":""}>Administrador</option></select></td><td><select data-id="${u.id}" data-f="ativo"><option value="true"${u.ativo?" selected":""}>Sim</option><option value="false"${u.ativo?"":" selected"}>Não</option></select></td></tr>`).join("")}</table></div>
+ <p class="muted">Para cadastrar um funcionário: Supabase > Authentication > Users > Add user, com e-mail e senha. Em "User metadata" use {"nome":"Nome","cargo":"sdr"}. Ele aparece aqui automaticamente.</p>`;
+ document.querySelectorAll("[data-f]").forEach(s=>s.onchange=async()=>{if(s.dataset.id===me.id&&s.dataset.f!=="cargo"){toast("Você não pode alterar sua própria permissão",1);return users()}
+  await q(sb.from("profiles").update({[s.dataset.f]:s.dataset.f==="ativo"?s.value==="true":s.value}).eq("id",s.dataset.id));toast("Usuário atualizado")})}
+async function audit(){const a=await q(sb.from("audit_log").select("*").order("created_at",{ascending:false}).limit(100));
+ $("#m").innerHTML=`<h2>Log de auditoria</h2><div class="tw"><table><tr><th>Quando</th><th>Tabela</th><th>Justificativa</th><th>Antes → Depois</th></tr>${a.map(x=>{const ch=Object.keys(x.depois).filter(k=>JSON.stringify(x.antes[k])!==JSON.stringify(x.depois[k])&&!["justificativa","updated_at"].includes(k));return`<tr><td>${new Date(x.created_at).toLocaleString("pt-BR")}</td><td>${x.tabela}</td><td>${esc(x.justificativa)}</td><td>${ch.map(k=>`${k}: ${esc(x.antes[k])} → ${esc(x.depois[k])}`).join("<br>")}</td></tr>`}).join("")||'<tr><td class="muted">Nenhuma correção registrada.</td></tr>'}</table></div>`}
+function cfgv(){$("#m").innerHTML=`<h2>Configurações</h2><label for="wn">WhatsApp administrativo (com DDI e DDD, só números)</label><input id="wn" value="${esc(cfg.whatsapp_admin)}" inputmode="numeric"><div class="row"><button class="btn pri" id="ws">Salvar</button></div>`;
+ $("#ws").onclick=async()=>{const v=$("#wn").value.replace(/\D/g,"");await q(sb.from("settings").upsert({key:"whatsapp_admin",value:v}));cfg.whatsapp_admin=v;toast("Número salvo")}}
+if(NOCFG){$("#app").innerHTML=`<div class="login"><div class="logo">BSA<small>Commercial</small></div>
+<p class="muted">Primeira configuração. Cole os dados do seu projeto Supabase (Settings > API).</p>
+<label for="cu">Project URL</label><input id="cu" placeholder="https://xxxx.supabase.co">
+<label for="ck">anon public key</label><input id="ck">
+<p></p><button class="btn pri" id="cg" style="width:100%">Salvar e gerar link</button><div id="co2"></div></div>`;
+$("#cg").onclick=()=>{const u=$("#cu").value.trim(),k=$("#ck").value.trim();
+ if(!/^https:\/\/.+\.supabase\.co/.test(u)||k.length<20)return toast("Confira a URL e a chave",1);
+ const l=location.origin+location.pathname+"#u="+encodeURIComponent(u)+"&k="+encodeURIComponent(k);
+ localStorage.setItem("bsa_cfg",JSON.stringify([u,k]));
+ $("#co2").innerHTML=`<p>Link para você e seus funcionários (já com a configuração):</p><input readonly value="${l}" onclick="this.select()"><p></p><button class="btn pri" style="width:100%" id="go2">Abrir o sistema</button>`;
+ $("#go2").onclick=()=>{location.href=l;location.reload()}}}else init();
+</script></body></html>
